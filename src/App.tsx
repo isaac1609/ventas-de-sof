@@ -4,7 +4,7 @@ function App() {
   return (
     <div className="app-container">
       <iframe
-        src="/src/legacy.html"
+        src="/legacy.html"
         title="Gestión Peluquería Canina"
         className="legacy-app"
       />
