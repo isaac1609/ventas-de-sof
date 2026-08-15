@@ -1,0 +1,1147 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>GESTIÓN PELUQUERÍA CANINA - SUPABASE</title>
+<!-- Supabase Client -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{
+  --primary:#5B4FE8;--primary-dark:#4338CA;--primary-light:#EEF2FF;
+  --accent:#10B981;--warn:#F59E0B;--danger:#EF4444;
+  --bg:#F8F7FF;--card:#fff;--text:#1E1B3A;--muted:#6B7280;--border:#E5E7EB;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
+
+.app{display:flex;height:100vh;overflow:hidden;}
+
+.sidebar{
+  width:240px;
+  background:linear-gradient(160deg,#4338CA 0%,#5B4FE8 60%,#7C3AED 100%);
+  color:#fff;display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto;z-index:100;
+  transition: transform 0.3s ease;
+}
+.sidebar-brand{display:flex;justify-content:space-between;align-items:center;padding:24px 20px 16px;border-bottom:1px solid rgba(255,255,255,.1);}
+.sidebar-brand h1{font-size:16px;font-weight:900;line-height:1.2;}
+.sidebar-brand .logo{font-size:28px;margin-right:10px;}
+.sidebar nav{padding:12px 8px;flex:1;}
+.nav-item{
+  display:flex;align-items:center;gap:10px;
+  padding:11px 14px;border-radius:10px;cursor:pointer;
+  font-size:14px;font-weight:500;transition:background .15s;margin-bottom:2px;
+}
+.nav-item:hover{background:rgba(255,255,255,.12);}
+.nav-item.active{background:rgba(255,255,255,.22);font-weight:700;}
+
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+.topbar{
+  display:none;align-items:center;justify-content:space-between;
+  padding:0 16px;height:58px;background:#fff;
+  border-bottom:1px solid var(--border);position:sticky;top:0;z-index:50;
+}
+.topbar-title{font-size:16px;font-weight:700;}
+.topbar-menu{background:none;border:none;cursor:pointer;font-size:22px;color:var(--text);padding:4px;}
+
+.content{flex:1;overflow-y:auto;padding:26px 26px 90px;}
+
+.bottom-nav{
+  display:none;position:fixed;bottom:0;left:0;right:0;
+  background:#fff;border-top:1px solid var(--border);z-index:200;
+  padding:6px 0 calc(6px + env(safe-area-inset-bottom));
+}
+.bottom-nav-inner{display:flex;justify-content:space-around;}
+.bnav-item{
+  display:flex;flex-direction:column;align-items:center;gap:2px;
+  cursor:pointer;padding:8px 6px;border:none;background:none;
+  color:var(--muted);font-size:10px;font-weight:500;transition:color .15s;flex:1;
+}
+.bnav-item.active{color:var(--primary);}
+
+.page{display:none;}
+.page.active{display:block;animation:fadeIn .2s ease;}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+.page-title{font-size:24px;font-weight:800;color:var(--text);letter-spacing:-.5px;}
+.page-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;gap:12px;flex-wrap:wrap;}
+
+.card{background:var(--card);border-radius:14px;box-shadow:0 1px 4px rgba(0,0,0,.06);padding:20px;margin-bottom:20px;}
+
+.btn{display:inline-flex;align-items:center;gap:6px;padding:10px 18px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;border:none;transition:all .15s;}
+.btn-primary{background:var(--primary);color:#fff;}
+.btn-primary:hover{background:var(--primary-dark);}
+.btn-secondary{background:var(--primary-light);color:var(--primary);}
+.btn-accent{background:var(--accent);color:#fff;}
+.btn-danger{background:var(--danger);color:#fff;}
+.btn-sm{padding:7px 12px;font-size:12px;}
+.btn:disabled{opacity:.6;cursor:not-allowed;}
+
+.form-group{display:flex;flex-direction:column;gap:5px;margin-bottom:12px;}
+.form-label{font-size:12px;font-weight:700;color:var(--text);}
+.form-input,.form-select{
+  padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;
+  font-size:14px;color:var(--text);background:#fff;width:100%;
+}
+.form-input[type="date"]{font-family:inherit;}
+
+.modal-overlay{
+  display:none;position:fixed;inset:0;
+  background:rgba(0,0,0,.5);z-index:500;
+  align-items:center;justify-content:center;padding:20px;
+}
+.modal-overlay.open{display:flex;}
+.modal{
+  background:#fff;border-radius:20px;
+  width:100%;max-width:560px;
+  max-height:90vh;overflow-y:auto;padding:24px;
+}
+.modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;}
+.modal-title{font-size:18px;font-weight:800;}
+.modal-close{background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted);}
+
+/* ── Dashboard ── */
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px;}
+.stat-card{background:#fff;padding:20px;border-radius:14px;box-shadow:0 1px 4px rgba(0,0,0,.06);border-left:4px solid var(--primary);}
+.stat-card.accent{border-left-color:var(--accent);}
+.stat-card.warn{border-left-color:var(--warn);}
+.stat-card.danger{border-left-color:var(--danger);}
+.stat-card.insumo{border-left-color:#8B5CF6;}
+.stat-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:8px;letter-spacing:.3px;}
+.stat-value{font-size:22px;font-weight:800;color:var(--text);}
+.stat-sub{font-size:11px;color:var(--muted);margin-top:4px;}
+
+/* ── Búsqueda (ventas del día) ── */
+.search-container{position:relative;margin-bottom:16px;}
+.search-results{
+    position:absolute;top:100%;left:0;right:0;
+    background:#fff;border-radius:10px;box-shadow:0 10px 25px rgba(0,0,0,0.1);
+    z-index:1000;max-height:300px;overflow-y:auto;display:none;
+}
+.search-results.active{display:block;}
+.search-item{display:flex;align-items:center;gap:12px;padding:10px 15px;cursor:pointer;border-bottom:1px solid var(--border);}
+.search-item:hover{background:var(--primary-light);}
+
+.selected-box{display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
+.selected-qty{width:90px;}
+.selected-metodo{width:150px;}
+
+.table-wrap{overflow-x:auto;}
+table{width:100%;border-collapse:collapse;font-size:13px;}
+th{text-align:left;padding:10px;color:var(--muted);font-size:11px;text-transform:uppercase;border-bottom:2px solid var(--border);}
+td{padding:10px;border-bottom:1px solid var(--border);}
+.badge{padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700;}
+.badge-efectivo{background:#DCFCE7;color:#16A34A;}
+.badge-cuenta{background:#DBEAFE;color:#2563EB;}
+.badge-ingreso{background:#DCFCE7;color:#16A34A;}
+.badge-gasto{background:#FEE2E2;color:#DC2626;}
+.badge-servicio{background:#EDE9FE;color:#7C3AED;}
+.badge-producto{background:#FEF3C7;color:#D97706;}
+
+.footer-summary{display:flex;justify-content:flex-end;gap:28px;padding:14px 10px;background:#fafafa;border-radius:10px;margin-top:8px;flex-wrap:wrap;}
+.footer-summary div{text-align:right;}
+.footer-summary .lbl{font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;}
+.footer-summary .val{font-size:18px;font-weight:800;}
+
+.alert-box{padding:16px 18px;border-radius:12px;margin-top:14px;font-weight:700;display:flex;align-items:center;gap:10px;}
+.alert-ok{background:#DCFCE7;color:#16A34A;}
+.alert-fail{background:#FEE2E2;color:#DC2626;}
+
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:10px 20px;border-radius:20px;z-index:1000;display:none;}
+
+/* ── Reportes ── */
+.report-period-selector{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;}
+.report-period-btn{padding:8px 16px;border-radius:20px;border:1.5px solid var(--border);background:#fff;cursor:pointer;font-size:13px;font-weight:600;transition:all .15s;}
+.report-period-btn.active{background:var(--primary);color:#fff;border-color:var(--primary);}
+.report-period-btn:hover{border-color:var(--primary);}
+
+.report-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:20px;}
+.report-item{padding:14px;border-radius:10px;background:#f9fafb;text-align:center;}
+.report-item .rlabel{font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;margin-bottom:4px;}
+.report-item .rvalue{font-size:20px;font-weight:800;}
+.report-item.positive .rvalue{color:var(--accent);}
+.report-item.negative .rvalue{color:var(--danger);}
+
+/* ── Empleados ── */
+.employee-card{display:flex;align-items:center;gap:14px;padding:14px;border-radius:10px;background:#f9fafb;margin-bottom:10px;}
+.employee-card .emp-name{font-weight:700;font-size:15px;}
+.employee-card .emp-salary{font-size:14px;color:var(--accent);font-weight:600;}
+.employee-card .emp-actions{margin-left:auto;display:flex;gap:6px;}
+
+/* ── Capital ── */
+.capital-timeline{margin-top:12px;}
+.capital-entry{display:flex;align-items:center;gap:12px;padding:10px;border-radius:8px;background:#f0fdf4;margin-bottom:6px;}
+.capital-entry .cap-date{font-size:12px;color:var(--muted);}
+.capital-entry .cap-amount{font-weight:700;color:var(--accent);}
+.capital-entry .cap-total{font-weight:800;font-size:16px;}
+
+/* ── Insumos ── */
+.insumo-card{display:flex;align-items:center;gap:14px;padding:14px;border-radius:10px;background:#f9fafb;margin-bottom:10px;border-left:4px solid #8B5CF6;}
+.insumo-card .ins-name{font-weight:700;font-size:14px;}
+.insumo-card .ins-detail{font-size:12px;color:var(--muted);}
+.insumo-card .ins-actions{margin-left:auto;display:flex;gap:6px;}
+.insumo-card .ins-barra{flex:1;height:8px;background:#E5E7EB;border-radius:4px;overflow:hidden;min-width:80px;}
+.insumo-card .ins-barra-fill{height:100%;border-radius:4px;transition:width .3s;}
+
+/* ── Catalogo ── */
+.catalogo-tabs{display:flex;gap:8px;margin-bottom:16px;}
+.catalogo-tab{padding:8px 18px;border-radius:8px;border:2px solid var(--border);background:#fff;cursor:pointer;font-size:13px;font-weight:600;transition:all .15s;}
+.catalogo-tab:hover{border-color:var(--primary);}
+.catalogo-tab.active{background:var(--primary);color:#fff;border-color:var(--primary);}
+
+.catalogo-list-item{display:flex;align-items:center;gap:12px;padding:12px;border-radius:10px;background:#f9fafb;margin-bottom:8px;}
+.catalogo-list-item .cli-name{font-weight:700;flex:1;}
+.catalogo-list-item .cli-detail{font-size:12px;color:var(--muted);}
+.catalogo-list-item .cli-actions{display:flex;gap:6px;}
+
+/* ── Size selector ── */
+.size-btn{display:inline-flex;align-items:center;justify-content:center;padding:8px 16px;border-radius:8px;border:2px solid var(--border);background:#fff;cursor:pointer;font-size:12px;font-weight:700;transition:all .15s;}
+.size-btn:hover{border-color:var(--primary);}
+.size-btn.active{background:var(--primary);color:#fff;border-color:var(--primary);}
+
+@media(max-width:768px){
+  .sidebar{display:none;position:fixed;top:0;left:0;height:100vh;width:260px;z-index:1000;transform:translateX(-100%);}
+  .sidebar.mobile-active{display:flex;transform:translateX(0);}
+  .topbar{display:flex;}
+  .bottom-nav{display:block;}
+  .content{padding:16px 16px 100px;}
+  .close-sidebar-btn{display:block!important;background:none;border:none;color:#fff;font-size:24px;cursor:pointer;}
+  .footer-summary{justify-content:space-between;gap:14px;}
+  .report-period-selector{flex-direction:column;}
+}
+.close-sidebar-btn{display:none;}
+</style>
+</head>
+<body>
+
+<div id="app-screen">
+  <div class="app">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-brand">
+        <div style="display:flex;align-items:center;">
+          <span class="logo">🐾</span>
+          <h1>PELUQUERÍA<br>CANINA</h1>
+        </div>
+        <button class="close-sidebar-btn" onclick="toggleSidebar()">✕</button>
+      </div>
+      <nav>
+        <div class="nav-item active" onclick="showPage('dashboard',this)">📊 Dashboard</div>
+        <div class="nav-item" onclick="showPage('ventas',this)">🧾 Ventas del Día</div>
+        <div class="nav-item" onclick="showPage('catalogo',this)">📋 Servicios y Productos</div>
+        <div class="nav-item" onclick="showPage('insumos',this)">🧴 Insumos</div>
+        <div class="nav-item" onclick="showPage('capital',this)">💎 Capital</div>
+        <div class="nav-item" onclick="showPage('empleados',this)">👥 Empleados</div>
+        <div class="nav-item" onclick="showPage('reportes',this)">📈 Reportes</div>
+        <div class="nav-item" onclick="showPage('caja',this)">💰 Caja</div>
+      </nav>
+    </aside>
+
+    <div class="main">
+      <header class="topbar">
+        <button class="topbar-menu" onclick="toggleSidebar()">☰</button>
+        <div class="topbar-title" id="topbar-title">DASHBOARD</div>
+        <div style="width:24px"></div>
+      </header>
+
+      <div class="content">
+
+        <!-- ═══════ DASHBOARD ═══════ -->
+        <div id="page-dashboard" class="page active">
+          <div class="page-header"><div class="page-title">🐾 Capital y Ganancias</div><button class="btn btn-secondary" onclick="loadDashboard()">🔄 Actualizar</button></div>
+          <div class="stats-grid">
+            <div class="stat-card"><div class="stat-label">Capital Invertido (acumulado)</div><div class="stat-value" id="stat-capital">$0</div><div class="stat-sub">Productos + Insumos · Solo sube</div></div>
+            <div class="stat-card accent"><div class="stat-label">Ganancia Bruta</div><div class="stat-value" id="stat-ganancia-bruta">$0</div><div class="stat-sub">Total cobrado</div></div>
+            <div class="stat-card accent"><div class="stat-label">Ganancia Líquida</div><div class="stat-value" id="stat-ganancia-liquida">$0</div><div class="stat-sub">Ganancia real</div></div>
+            <div class="stat-card warn"><div class="stat-label">Pago Empleados (este mes)</div><div class="stat-value" id="stat-pago-empleados">$0</div><div class="stat-sub">Total pagado</div></div>
+            <div class="stat-card"><div class="stat-label">Valor Inventario</div><div class="stat-value" id="stat-inventario">$0</div></div>
+            <div class="stat-card"><div class="stat-label">Ingresos Hoy</div><div class="stat-value" id="stat-ingresos-hoy">$0</div></div>
+            <div class="stat-card"><div class="stat-label">Perros Atendidos Hoy</div><div class="stat-value" id="stat-perros-hoy">0</div></div>
+            <div class="stat-card insumo" id="stat-insumos-bajo-card" style="cursor:pointer;" onclick="scrollToInsumosBajo()">
+              <div class="stat-label">⚠️ Insumos Bajos — Toca para ver</div><div class="stat-value" id="stat-insumos-bajo">0</div><div class="stat-sub">Insumos con bajo rendimiento</div>
+            </div>
+          </div>
+          <div id="insumos-bajo-lista" class="card" style="display:none;">
+            <div class="stat-label" style="margin-bottom:12px;color:#8B5CF6">🧴 Insumos con Bajo Rendimiento</div>
+            <div id="insumos-bajo-items"></div>
+          </div>
+        </div>
+
+        <!-- ═══════ VENTAS DEL DÍA (UNIFICADO) ═══════ -->
+        <div id="page-ventas" class="page">
+          <div class="page-header"><div class="page-title">🧾 Ventas del Día</div></div>
+          <div class="card">
+            <div class="form-group">
+              <label class="form-label">📅 Fecha</label>
+              <input type="date" id="venta-fecha" class="form-input">
+            </div>
+
+            <!-- Selector tamaño perro (solo para servicios) -->
+            <div id="tamano-selector" style="margin-bottom:15px;">
+              <label class="form-label">🐕 Tamaño del Perro (para servicios)</label>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:5px;">
+                <div class="size-btn active" onclick="selectTamano('chico',this)">Chico</div>
+                <div class="size-btn" onclick="selectTamano('mediano',this)">Mediano</div>
+                <div class="size-btn" onclick="selectTamano('grande',this)">Grande</div>
+                <div class="size-btn" onclick="selectTamano('cachorro',this)">Cachorro</div>
+              </div>
+            </div>
+
+            <div class="search-container">
+              <input type="text" id="venta-search" class="form-input" placeholder="🔍 Buscar servicio o producto..." oninput="handleVentaSearch(this.value)">
+              <div id="venta-search-results" class="search-results"></div>
+            </div>
+
+            <div id="venta-selected-box" class="card" style="display:none;background:var(--primary-light);border:1px solid var(--primary);">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;">
+                <div>
+                  <div id="sel-nombre" style="font-weight:800;font-size:16px;">Nombre</div>
+                  <div id="sel-info" style="font-size:12px;color:var(--primary);font-weight:600;">Info</div>
+                </div>
+                <button class="modal-close" onclick="selectedItem=null;document.getElementById('venta-selected-box').style.display='none'">✕</button>
+              </div>
+              <div class="selected-box">
+                <div class="form-group" id="sel-mascota-group">
+                  <label class="form-label">Nombre Mascota</label>
+                  <input type="text" id="sel-mascota" class="form-input" placeholder="Ej: Toby">
+                </div>
+                <div class="form-group" id="sel-cantidad-group">
+                  <label class="form-label">Cant.</label>
+                  <input type="number" id="sel-cantidad" class="form-input selected-qty" value="1">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Pago</label>
+                  <select id="sel-metodo" class="form-select selected-metodo">
+                    <option value="efectivo">💵 Efectivo</option>
+                    <option value="cuenta">🏦 Cuenta</option>
+                  </select>
+                </div>
+                <button class="btn btn-primary" style="height:42px;margin-top:10px" onclick="addLineaVenta()">➕ Añadir</button>
+              </div>
+            </div>
+
+            <div class="table-wrap" style="margin-top:20px;">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Item</th>
+                    <th>Detalle</th>
+                    <th>Mascota</th>
+                    <th>Cant.</th>
+                    <th>Precio</th>
+                    <th>Subtotal</th>
+                    <th>Pago</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="ventas-body">
+                  <tr><td colspan="8" style="text-align:center;color:var(--muted);padding:20px;">Busca y agrega servicios o productos</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="footer-summary">
+              <div><div class="lbl">Total Venta</div><div class="val" id="venta-total">$0</div></div>
+              <button class="btn btn-accent" style="height:48px;padding:0 30px;" onclick="guardarVentaDia()">💾 Guardar Todo</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="stat-label" style="margin-bottom:12px">Historial de ventas (hoy)</div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Hora</th><th>Tipo</th><th>Item</th><th>Mascota</th><th>Monto</th><th>Metodo</th><th></th></tr></thead>
+                <tbody id="historial-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- ═══════ CATALOGO ═══════ -->
+        <div id="page-catalogo" class="page">
+          <div class="page-header"><div class="page-title">📋 Catálogo</div><button class="btn btn-primary" onclick="openNuevoModal()">+ Nuevo</button></div>
+          <div class="catalogo-tabs">
+            <div class="catalogo-tab active" onclick="switchCatalogoTab('servicios',this)">✂️ Servicios</div>
+            <div class="catalogo-tab" onclick="switchCatalogoTab('productos',this)">📦 Productos</div>
+          </div>
+          <div id="catalogo-servicios">
+            <div id="servicios-list"></div>
+          </div>
+          <div id="catalogo-productos" style="display:none;">
+            <div class="card" style="padding:0;overflow:hidden;">
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>Producto</th><th>Código</th><th>Costo</th><th>Precio</th><th>Margen</th><th>Stock</th><th></th></tr></thead>
+                  <tbody id="prod-body"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ═══════ INSUMOS ═══════ -->
+        <div id="page-insumos" class="page">
+          <div class="page-header"><div class="page-title">🧴 Insumos</div><button class="btn btn-primary" onclick="openInsumoModal()">+ Nuevo Insumo</button></div>
+          <div id="insumos-list"></div>
+        </div>
+
+        <!-- ═══════ CAPITAL ═══════ -->
+        <div id="page-capital" class="page">
+          <div class="page-header"><div class="page-title">💎 Capital</div></div>
+          <div class="stats-grid">
+            <div class="stat-card"><div class="stat-label">Capital Total</div><div class="stat-value" id="capital-actual">$0</div><div class="stat-sub" id="capital-desglose">Cargando...</div></div>
+            <div class="stat-card accent"><div class="stat-label">Valor en Inventario</div><div class="stat-value" id="capital-auto">$0</div><div class="stat-sub" id="capital-auto-sub">Cargando...</div></div>
+          </div>
+          <div class="card">
+            <div class="stat-label" style="margin-bottom:15px">Añadir Capital Extra (Efectivo/Inversión)</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:12px;">
+              <div class="form-group"><label class="form-label">Monto</label><input type="number" id="cap-monto" class="form-input" placeholder="Ej: 100000"></div>
+              <div class="form-group"><label class="form-label">Descripción</label><input type="text" id="cap-desc" class="form-input" placeholder="Ej: Inversión inicial"></div>
+            </div>
+            <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="agregarCapital()">💎 Agregar Capital</button>
+          </div>
+          <div class="card"><div class="stat-label" style="margin-bottom:15px">Historial de aportes</div><div class="capital-timeline" id="capital-timeline"></div></div>
+        </div>
+
+        <!-- ═══════ EMPLEADOS ═══════ -->
+        <div id="page-empleados" class="page">
+          <div class="page-header"><div class="page-title">👥 Empleados</div><button class="btn btn-primary" onclick="openEmpleadoModal()">+ Nuevo Empleado</button></div>
+          <div id="empleados-resumen"></div>
+          <div id="empleados-list"></div>
+        </div>
+
+        <!-- ═══════ REPORTES ═══════ -->
+        <div id="page-reportes" class="page">
+          <div class="page-header"><div class="page-title">📈 Reportes</div></div>
+          <div class="card">
+            <div class="report-period-selector">
+              <button class="report-period-btn active" onclick="changeReportPeriod('hoy',this)">Hoy</button>
+              <button class="report-period-btn" onclick="changeReportPeriod('semana',this)">Esta Semana</button>
+              <button class="report-period-btn" onclick="changeReportPeriod('mes',this)">Este Mes</button>
+            </div>
+            <div id="report-content"></div>
+          </div>
+        </div>
+
+        <!-- ═══════ CAJA ═══════ -->
+        <div id="page-caja" class="page">
+          <div class="page-header"><div class="page-title">💰 Caja y Movimientos</div></div>
+          <div class="card">
+            <div class="stat-label" style="margin-bottom:15px;color:var(--primary)">🟢 Registrar Movimiento Manual</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:12px;">
+              <div class="form-group"><label class="form-label">Tipo</label>
+                <select id="mov-tipo" class="form-select"><option value="efectivo">💵 Efectivo</option><option value="cuenta">🏦 Cuenta</option></select>
+              </div>
+              <div class="form-group"><label class="form-label">Categoría</label>
+                <select id="mov-categoria" class="form-select"><option value="ingreso">🟢 Ingreso Extra</option><option value="gasto">🔴 Gasto / Pago</option><option value="retiro">📤 Retiro de Capital</option></select>
+              </div>
+            </div>
+            <div class="form-group"><label class="form-label">Monto</label><input type="number" id="mov-monto" class="form-input" placeholder="0"></div>
+            <div class="form-group"><label class="form-label">Descripción</label><input type="text" id="mov-desc" class="form-input" placeholder="Ej: Pago de luz"></div>
+            <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="registrarMovimiento()">Registrar Movimiento</button>
+          </div>
+          <div class="card">
+            <div class="stat-label" style="margin-bottom:10px">Movimientos recientes</div>
+            <div class="table-wrap">
+              <table><thead><tr><th>Fecha</th><th>Tipo</th><th>Categoría</th><th>Monto</th><th>Descripción</th></tr></thead><tbody id="caja-mov-body"></tbody></table>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <nav class="bottom-nav">
+    <div class="bottom-nav-inner">
+      <button class="bnav-item active" onclick="showPage('dashboard',this)">📊<span>Dash</span></button>
+      <button class="bnav-item" onclick="showPage('ventas',this)">🧾<span>Ventas</span></button>
+      <button class="bnav-item" onclick="showPage('catalogo',this)">📋<span>Catál</span></button>
+      <button class="bnav-item" onclick="showPage('insumos',this)">🧴<span>Ins</span></button>
+      <button class="bnav-item" onclick="showPage('capital',this)">💎<span>Cap</span></button>
+      <button class="bnav-item" onclick="showPage('empleados',this)">👥<span>Emp</span></button>
+      <button class="bnav-item" onclick="showPage('reportes',this)">📈<span>Rep</span></button>
+      <button class="bnav-item" onclick="showPage('caja',this)">💰<span>Caja</span></button>
+    </div>
+  </nav>
+</div>
+
+<!-- MODAL NUEVO (Servicio o Producto) -->
+<div class="modal-overlay" id="modal-nuevo">
+  <div class="modal">
+    <div class="modal-header"><div class="modal-title">Agregar Nuevo</div><button class="modal-close" onclick="closeModal('modal-nuevo')">✕</button></div>
+    <div class="catalogo-tabs">
+      <div class="catalogo-tab active" id="tab-new-servicio" onclick="switchNuevoTab('servicio')">✂️ Servicio</div>
+      <div class="catalogo-tab" id="tab-new-producto" onclick="switchNuevoTab('producto')">📦 Producto</div>
+    </div>
+
+    <!-- Form Servicio -->
+    <div id="form-nuevo-servicio">
+      <div class="form-group"><label class="form-label">Nombre del servicio *</label><input id="ns-nombre" class="form-input" type="text" placeholder="Ej: Baño completo"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="form-group"><label class="form-label">Precio Perro Chico *</label><input id="ns-precio-chico" class="form-input" type="number" placeholder="Ej: 8000"></div>
+        <div class="form-group"><label class="form-label">Precio Perro Mediano *</label><input id="ns-precio-mediano" class="form-input" type="number" placeholder="Ej: 12000"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="form-group"><label class="form-label">Precio Perro Grande</label><input id="ns-precio-grande" class="form-input" type="number" placeholder="Ej: 16000"></div>
+        <div class="form-group"><label class="form-label">Precio Cachorro</label><input id="ns-precio-cachorro" class="form-input" type="number" placeholder="Ej: 6000"></div>
+      </div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:10px" onclick="saveServicio()">💾 Guardar Servicio</button>
+    </div>
+
+    <!-- Form Producto -->
+    <div id="form-nuevo-producto" style="display:none;">
+      <div class="form-group"><label class="form-label">Código</label><input id="np-codigo" class="form-input" type="text" placeholder="Ej: PROD-001"></div>
+      <div class="form-group"><label class="form-label">Nombre del producto *</label><input id="np-nombre" class="form-input" type="text"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="form-group"><label class="form-label">Costo (compra) *</label><input id="np-costo" class="form-input" type="number"></div>
+        <div class="form-group"><label class="form-label">Precio de venta *</label><input id="np-precio" class="form-input" type="number"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Stock</label><input id="np-stock" class="form-input" type="number" value="0"></div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:10px" onclick="saveProducto()">💾 Guardar Producto</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL EDITAR SERVICIO -->
+<div class="modal-overlay" id="modal-edit-servicio">
+  <div class="modal">
+    <div class="modal-header"><div class="modal-title">Editar Servicio</div><button class="modal-close" onclick="closeModal('modal-edit-servicio')">✕</button></div>
+    <div class="form-group"><label class="form-label">Nombre del servicio *</label><input id="es-nombre" class="form-input" type="text"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="form-group"><label class="form-label">Precio Perro Chico *</label><input id="es-precio-chico" class="form-input" type="number"></div>
+      <div class="form-group"><label class="form-label">Precio Perro Mediano *</label><input id="es-precio-mediano" class="form-input" type="number"></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="form-group"><label class="form-label">Precio Perro Grande</label><input id="es-precio-grande" class="form-input" type="number"></div>
+      <div class="form-group"><label class="form-label">Precio Cachorro</label><input id="es-precio-cachorro" class="form-input" type="number"></div>
+    </div>
+    <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:10px" onclick="updateServicio()">💾 Actualizar Servicio</button>
+  </div>
+</div>
+
+<!-- MODAL EDITAR PRODUCTO -->
+<div class="modal-overlay" id="modal-edit-producto">
+  <div class="modal">
+    <div class="modal-header"><div class="modal-title">Editar Producto</div><button class="modal-close" onclick="closeModal('modal-edit-producto')">✕</button></div>
+    <div class="form-group"><label class="form-label">Código</label><input id="ep-codigo" class="form-input" type="text"></div>
+    <div class="form-group"><label class="form-label">Nombre *</label><input id="ep-nombre" class="form-input" type="text"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="form-group"><label class="form-label">Costo *</label><input id="ep-costo" class="form-input" type="number"></div>
+      <div class="form-group"><label class="form-label">Precio de venta *</label><input id="ep-precio" class="form-input" type="number"></div>
+    </div>
+    <div class="form-group"><label class="form-label">Stock</label><input id="ep-stock" class="form-input" type="number" value="0"></div>
+    <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:10px" onclick="updateProducto()">💾 Actualizar Producto</button>
+  </div>
+</div>
+
+<!-- MODAL INSUMO -->
+<div class="modal-overlay" id="modal-insumo">
+  <div class="modal">
+    <div class="modal-header"><div class="modal-title" id="modal-insumo-title">Nuevo Insumo</div><button class="modal-close" onclick="closeModal('modal-insumo')">✕</button></div>
+    <div class="form-group"><label class="form-label">Nombre del insumo *</label><input id="ins-nombre" class="form-input" type="text" placeholder="Ej: Shampoo Premium 1L"></div>
+    <div class="form-group"><label class="form-label">Costo (lo que pagaste) *</label><input id="ins-costo" class="form-input" type="number" placeholder="Ej: 15000"></div>
+    <div class="form-group">
+      <label class="form-label">Tipo de rendimiento</label>
+      <select id="ins-tipo-rendimiento" class="form-select" onchange="toggleRendimiento()">
+        <option value="perros">Por cantidad de perros (Ej: rinde para 20 perros)</option>
+        <option value="porcentaje">Por porcentaje por servicio (Ej: 5% por perro chico)</option>
+      </select>
+    </div>
+    <div id="ins-rend-perros-group" class="form-group">
+      <label class="form-label">¿Para cuántos perros rinde? *</label>
+      <input id="ins-rend-perros" class="form-input" type="number" placeholder="Ej: 20">
+    </div>
+    <div id="ins-rend-porcentaje-group" class="form-group" style="display:none;">
+      <label class="form-label">% por perro chico</label><input id="ins-rend-pct-chico" class="form-input" type="number" step="0.1" value="5">
+      <label class="form-label">% por perro mediano</label><input id="ins-rend-pct-mediano" class="form-input" type="number" step="0.1" value="8">
+      <label class="form-label">% por perro grande</label><input id="ins-rend-pct-grande" class="form-input" type="number" step="0.1" value="12">
+      <label class="form-label">% por cachorro</label><input id="ins-rend-pct-cachorro" class="form-input" type="number" step="0.1" value="4">
+    </div>
+    <div class="form-group"><label class="form-label">Unidad de medida</label><input id="ins-unidad" class="form-input" type="text" placeholder="Ej: litros, ml"></div>
+    <button id="btn-save-ins" class="btn btn-primary" style="width:100%;justify-content:center;margin-top:10px" onclick="saveInsumo()">Guardar</button>
+  </div>
+</div>
+
+<!-- MODAL EMPLEADO -->
+<div class="modal-overlay" id="modal-empleado">
+  <div class="modal">
+    <div class="modal-header"><div class="modal-title" id="modal-empleado-title">Nuevo Empleado</div><button class="modal-close" onclick="closeModal('modal-empleado')">✕</button></div>
+    <div class="form-group"><label class="form-label">Nombre *</label><input id="emp-nombre" class="form-input" type="text"></div>
+    <div class="form-group"><label class="form-label">Cargo / Descripción</label><input id="emp-cargo" class="form-input" type="text" placeholder="Ej: Peluquero canino"></div>
+    <div class="form-group"><label class="form-label">Pago por día *</label><input id="emp-pago" class="form-input" type="number" placeholder="0"></div>
+    <button id="btn-save-emp" class="btn btn-primary" style="width:100%;justify-content:center;margin-top:10px" onclick="saveEmpleado()">Guardar</button>
+  </div>
+</div>
+
+<!-- MODAL PAGO EMPLEADOS -->
+<div class="modal-overlay" id="modal-pago-empleados">
+  <div class="modal">
+    <div class="modal-header"><div class="modal-title">Registrar Pago a Empleados</div><button class="modal-close" onclick="closeModal('modal-pago-empleados')">✕</button></div>
+    <div class="form-group"><label class="form-label">📅 Fecha del pago</label>
+      <input type="date" id="pago-fecha" class="form-input">
+    </div>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:12px;">Se pagará el monto diario de cada empleado por la fecha seleccionada.</p>
+    <button class="btn btn-accent" style="width:100%;justify-content:center;height:48px;font-size:15px;" onclick="registrarPagoEmpleados()">💰 Registrar Pago</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ════════════════════════════════════════════
+// ─── SUPABASE CONFIG ───
+// ════════════════════════════════════════════
+const SUPABASE_URL = 'https://gixfexkbblslkrksnazw.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdpeGZleGtiYmxzbGtya3NuYXp3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE0NzQyODYsImV4cCI6MjA5NzA1MDI4Nn0.iCqx8aW8sPH2F9FpjgW7C9UQP53weLcCyJ8BmnEhYGE';
+const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const fmt = new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 });
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.style.display = 'block';
+  setTimeout(() => t.style.display = 'none', 3000);
+}
+
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+function toggleSidebar() { document.getElementById('sidebar').classList.toggle('mobile-active'); }
+
+async function showPage(name, el) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  document.querySelectorAll('.nav-item, .bnav-item').forEach(n => n.classList.remove('active'));
+  if(el) el.classList.add('active');
+  document.getElementById('topbar-title').textContent = name.toUpperCase();
+  
+  if(name === 'dashboard') await loadDashboard();
+  if(name === 'ventas') { initVentaFecha(); await loadVentasGuardadas(); }
+  if(name === 'catalogo') await loadCatalogo();
+  if(name === 'insumos') await loadInsumos();
+  if(name === 'capital') await loadCapital();
+  if(name === 'empleados') await loadEmpleados();
+  if(name === 'reportes') await loadReportes();
+  if(name === 'caja') await loadCaja();
+  
+  document.getElementById('sidebar').classList.remove('mobile-active');
+}
+
+// ════════════════════════════════════════════
+// ─── CATALOGO ───
+// ════════════════════════════════════════════
+let editingServicioId = null;
+let editingProductoId = null;
+
+async function loadCatalogo() {
+  // Servicios
+  const { data: servicios, error: sError } = await supabaseClient.from('pel_servicios').select('*').order('nombre');
+  const servList = document.getElementById('servicios-list');
+  if(sError) toast('Error al cargar servicios');
+  else if(!servicios.length) servList.innerHTML = '<p style="color:var(--muted);text-align:center;padding:16px;">No hay servicios.</p>';
+  else {
+    servList.innerHTML = servicios.map(s => `<div class="catalogo-list-item">
+      <div style="flex:1">
+        <div class="cli-name">${s.nombre}</div>
+        <div class="cli-detail">Chico: ${fmt.format(s.precio_chico)} · Med: ${fmt.format(s.precio_mediano)} · Gde: ${fmt.format(s.precio_grande)} · Cach: ${fmt.format(s.precio_cachorro)}</div>
+      </div>
+      <div class="cli-actions">
+        <button class="btn btn-secondary btn-sm" onclick="openEditServicio('${s.id}')">✏️</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteServicio('${s.id}')">🗑</button>
+      </div>
+    </div>`).join('');
+  }
+
+  // Productos
+  const { data: productos, error: pError } = await supabaseClient.from('pel_productos').select('*').order('nombre');
+  const prodBody = document.getElementById('prod-body');
+  if(pError) toast('Error al cargar productos');
+  else if(!productos.length) prodBody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px">Sin productos</td></tr>';
+  else {
+    prodBody.innerHTML = productos.map(p => {
+      const margen = p.costo > 0 ? Math.round(((p.precio_venta - p.costo) / p.costo) * 100) : 0;
+      return `<tr>
+        <td>${p.nombre}</td><td>${p.codigo||'-'}</td>
+        <td>${fmt.format(p.costo)}</td><td>${fmt.format(p.precio_venta)}</td>
+        <td>${margen}%</td><td>${p.stock}${p.stock<5?' ⚠️':''}</td>
+        <td><button class="btn btn-secondary btn-sm" onclick="openEditProducto('${p.id}')">✏️</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteProducto('${p.id}')">🗑</button></td>
+      </tr>`;
+    }).join('');
+  }
+}
+
+function switchCatalogoTab(tab, el) {
+  document.querySelectorAll('.catalogo-tab').forEach(t => t.classList.remove('active'));
+  if(el) el.classList.add('active');
+  document.getElementById('catalogo-servicios').style.display = tab === 'servicios' ? 'block' : 'none';
+  document.getElementById('catalogo-productos').style.display = tab === 'productos' ? 'block' : 'none';
+}
+
+function openNuevoModal() {
+  switchNuevoTab('servicio');
+  document.getElementById('ns-nombre').value = '';
+  document.getElementById('ns-precio-chico').value = '';
+  document.getElementById('ns-precio-mediano').value = '';
+  document.getElementById('ns-precio-grande').value = '';
+  document.getElementById('ns-precio-cachorro').value = '';
+  document.getElementById('np-codigo').value = '';
+  document.getElementById('np-nombre').value = '';
+  document.getElementById('np-costo').value = '';
+  document.getElementById('np-precio').value = '';
+  document.getElementById('np-stock').value = '0';
+  openModal('modal-nuevo');
+}
+
+function switchNuevoTab(tipo) {
+  document.getElementById('tab-new-servicio').classList.toggle('active', tipo === 'servicio');
+  document.getElementById('tab-new-producto').classList.toggle('active', tipo === 'producto');
+  document.getElementById('form-nuevo-servicio').style.display = tipo === 'servicio' ? 'block' : 'none';
+  document.getElementById('form-nuevo-producto').style.display = tipo === 'producto' ? 'block' : 'none';
+}
+
+async function saveServicio() {
+  const nombre = document.getElementById('ns-nombre').value.trim();
+  const precio_chico = parseFloat(document.getElementById('ns-precio-chico').value) || 0;
+  const precio_mediano = parseFloat(document.getElementById('ns-precio-mediano').value) || 0;
+  const precio_grande = parseFloat(document.getElementById('ns-precio-grande').value) || 0;
+  const precio_cachorro = parseFloat(document.getElementById('ns-precio-cachorro').value) || 0;
+  
+  if(!nombre) return toast('Nombre es obligatorio');
+  
+  const { error } = await supabaseClient.from('pel_servicios').insert([{ nombre, precio_chico, precio_mediano, precio_grande, precio_cachorro }]);
+  if(error) toast('Error al guardar');
+  else { toast('Servicio creado'); closeModal('modal-nuevo'); await loadCatalogo(); }
+}
+
+async function saveProducto() {
+  const codigo = document.getElementById('np-codigo').value.trim();
+  const nombre = document.getElementById('np-nombre').value.trim();
+  const costo = parseFloat(document.getElementById('np-costo').value) || 0;
+  const precio_venta = parseFloat(document.getElementById('np-precio').value) || 0;
+  const stock = parseInt(document.getElementById('np-stock').value) || 0;
+  
+  if(!nombre) return toast('Nombre es obligatorio');
+  
+  const { error } = await supabaseClient.from('pel_productos').insert([{ nombre, codigo, costo, precio_venta, stock }]);
+  if(error) toast('Error al guardar');
+  else { toast('Producto creado'); closeModal('modal-nuevo'); await loadCatalogo(); }
+}
+
+async function openEditServicio(id) {
+  editingServicioId = id;
+  const { data: s } = await supabaseClient.from('pel_servicios').select('*').eq('id', id).single();
+  if(!s) return;
+  document.getElementById('es-nombre').value = s.nombre;
+  document.getElementById('es-precio-chico').value = s.precio_chico;
+  document.getElementById('es-precio-mediano').value = s.precio_mediano;
+  document.getElementById('es-precio-grande').value = s.precio_grande;
+  document.getElementById('es-precio-cachorro').value = s.precio_cachorro;
+  openModal('modal-edit-servicio');
+}
+
+async function updateServicio() {
+  const nombre = document.getElementById('es-nombre').value.trim();
+  const precio_chico = parseFloat(document.getElementById('es-precio-chico').value) || 0;
+  const precio_mediano = parseFloat(document.getElementById('es-precio-mediano').value) || 0;
+  const precio_grande = parseFloat(document.getElementById('es-precio-grande').value) || 0;
+  const precio_cachorro = parseFloat(document.getElementById('es-precio-cachorro').value) || 0;
+  
+  const { error } = await supabaseClient.from('pel_servicios').update({ nombre, precio_chico, precio_mediano, precio_grande, precio_cachorro }).eq('id', editingServicioId);
+  if(error) toast('Error al actualizar');
+  else { toast('Servicio actualizado'); closeModal('modal-edit-servicio'); await loadCatalogo(); }
+}
+
+async function deleteServicio(id) {
+  if(!confirm('¿Eliminar?')) return;
+  const { error } = await supabaseClient.from('pel_servicios').delete().eq('id', id);
+  if(error) toast('Error al eliminar');
+  else await loadCatalogo();
+}
+
+async function openEditProducto(id) {
+  editingProductoId = id;
+  const { data: p } = await supabaseClient.from('pel_productos').select('*').eq('id', id).single();
+  if(!p) return;
+  document.getElementById('ep-codigo').value = p.codigo||'';
+  document.getElementById('ep-nombre').value = p.nombre;
+  document.getElementById('ep-costo').value = p.costo;
+  document.getElementById('ep-precio').value = p.precio_venta;
+  document.getElementById('ep-stock').value = p.stock;
+  openModal('modal-edit-producto');
+}
+
+async function updateProducto() {
+  const codigo = document.getElementById('ep-codigo').value.trim();
+  const nombre = document.getElementById('ep-nombre').value.trim();
+  const costo = parseFloat(document.getElementById('ep-costo').value) || 0;
+  const precio_venta = parseFloat(document.getElementById('ep-precio').value) || 0;
+  const stock = parseInt(document.getElementById('ep-stock').value) || 0;
+  
+  const { error } = await supabaseClient.from('pel_productos').update({ nombre, codigo, costo, precio_venta, stock }).eq('id', editingProductoId);
+  if(error) toast('Error al actualizar');
+  else { toast('Producto actualizado'); closeModal('modal-edit-producto'); await loadCatalogo(); }
+}
+
+async function deleteProducto(id) {
+  if(!confirm('¿Eliminar?')) return;
+  const { error } = await supabaseClient.from('pel_productos').delete().eq('id', id);
+  if(error) toast('Error al eliminar');
+  else await loadCatalogo();
+}
+
+// ════════════════════════════════════════════
+// ─── VENTAS ───
+// ════════════════════════════════════════════
+let currentTamano = 'chico';
+let diaLineas = [];
+let selectedItem = null;
+
+function initVentaFecha() {
+  document.getElementById('venta-fecha').value = new Date().toISOString().split('T')[0];
+}
+
+function selectTamano(tamano, btn) {
+  currentTamano = tamano;
+  document.querySelectorAll('.size-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  if(selectedItem && selectedItem.tipo === 'servicio') {
+    const precio = selectedItem.data[`precio_${currentTamano}`] || 0;
+    document.getElementById('sel-info').textContent = `Servicio · ${fmt.format(precio)} c/u (${currentTamano})`;
+  }
+}
+
+async function handleVentaSearch(val) {
+  const resultsDiv = document.getElementById('venta-search-results');
+  if(!val.trim()) { resultsDiv.classList.remove('active'); return; }
+  const v = val.toLowerCase().trim();
+  
+  const { data: servicios } = await supabaseClient.from('pel_servicios').select('*').ilike('nombre', `%${v}%`);
+  const { data: productos } = await supabaseClient.from('pel_productos').select('*').or(`nombre.ilike.%${v}%,codigo.ilike.%${v}%`);
+  
+  let results = [];
+  if(servicios) servicios.forEach(s => {
+    const precio = s[`precio_${currentTamano}`] || 0;
+    results.push({ tipo: 'servicio', data: s, label: `✂️ ${s.nombre}`, info: `${fmt.format(precio)} · ${currentTamano}`, precio });
+  });
+  if(productos) productos.forEach(p => {
+    results.push({ tipo: 'producto', data: p, label: `📦 ${p.nombre}`, info: `Stock: ${p.stock} · ${fmt.format(p.precio_venta)} c/u`, precio: p.precio_venta });
+  });
+  
+  resultsDiv.innerHTML = results.map((r, idx) => `<div class="search-item" onclick="selectVentaItem(${idx})">
+    <div style="flex:1"><div style="font-weight:700">${r.label}</div><div style="font-size:11px;color:var(--muted)">${r.info}</div></div>
+    <div style="font-weight:800">${fmt.format(r.precio)}</div>
+  </div>`).join('') || '<div style="padding:14px;color:var(--muted)">Sin resultados</div>';
+  
+  window._ventaResults = results;
+  resultsDiv.classList.add('active');
+}
+
+function selectVentaItem(idx) {
+  selectedItem = window._ventaResults[idx];
+  document.getElementById('venta-search').value = '';
+  document.getElementById('venta-search-results').classList.remove('active');
+  document.getElementById('sel-nombre').textContent = selectedItem.label;
+  document.getElementById('sel-info').textContent = selectedItem.info;
+  document.getElementById('sel-cantidad').value = 1;
+  document.getElementById('sel-mascota-group').style.display = selectedItem.tipo === 'servicio' ? 'flex' : 'none';
+  document.getElementById('sel-cantidad-group').style.display = selectedItem.tipo === 'servicio' ? 'none' : 'flex';
+  document.getElementById('venta-selected-box').style.display = 'block';
+}
+
+function addLineaVenta() {
+  if(!selectedItem) return;
+  const metodo = document.getElementById('sel-metodo').value;
+  const mascota = document.getElementById('sel-mascota').value.trim() || '-';
+  
+  if(selectedItem.tipo === 'servicio') {
+    const precio = selectedItem.data[`precio_${currentTamano}`] || 0;
+    diaLineas.push({ tipo: 'servicio', item_id: selectedItem.data.id, nombre: selectedItem.data.nombre, tamano: currentTamano, cantidad: 1, precio, metodo_pago: metodo, mascota });
+  } else {
+    const cantidad = parseInt(document.getElementById('sel-cantidad').value) || 1;
+    diaLineas.push({ tipo: 'producto', item_id: selectedItem.data.id, nombre: selectedItem.data.nombre, cantidad, precio: selectedItem.data.precio_venta, costo: selectedItem.data.costo, metodo_pago: metodo, mascota: '-' });
+  }
+  
+  selectedItem = null;
+  document.getElementById('venta-selected-box').style.display = 'none';
+  renderDiaLineas();
+}
+
+function renderDiaLineas() {
+  const body = document.getElementById('ventas-body');
+  let total = 0;
+  if(!diaLineas.length) body.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:20px;">Busca y agrega...</td></tr>';
+  else {
+    body.innerHTML = diaLineas.map((l, idx) => {
+      const sub = l.cantidad * l.precio;
+      total += sub;
+      return `<tr><td>${l.nombre}</td><td>${l.tamano||''}</td><td>${l.mascota}</td><td>${l.cantidad}</td><td>${fmt.format(l.precio)}</td><td>${fmt.format(sub)}</td><td>${l.metodo_pago}</td><td><button class="btn btn-danger btn-sm" onclick="diaLineas.splice(${idx},1);renderDiaLineas()">🗑</button></td></tr>`;
+    }).join('');
+  }
+  document.getElementById('venta-total').textContent = fmt.format(total);
+}
+
+async function guardarVentaDia() {
+  if(!diaLineas.length) return toast('No hay líneas para guardar');
+  const fecha = document.getElementById('venta-fecha').value;
+  
+  for(const l of diaLineas) {
+    const ganancia = l.tipo === 'producto' ? (l.precio - l.costo) * l.cantidad : l.precio;
+    await supabaseClient.from('pel_registros_ventas').insert([{
+      fecha, tipo: l.tipo, item_id: l.item_id, nombre: l.nombre, tamano: l.tamano,
+      cantidad: l.cantidad, precio: l.precio, costo: l.costo || 0,
+      metodo_pago: l.metodo_pago, mascota: l.mascota, ganancia
+    }]);
+    
+    if(l.tipo === 'producto') {
+      const { data: p } = await supabaseClient.from('pel_productos').select('stock').eq('id', l.item_id).single();
+      if(p) await supabaseClient.from('pel_productos').update({ stock: p.stock - l.cantidad }).eq('id', l.item_id);
+    }
+  }
+  
+  diaLineas = [];
+  renderDiaLineas();
+  toast('Ventas guardadas en Supabase');
+  await loadVentasGuardadas();
+}
+
+async function loadVentasGuardadas() {
+  const fecha = document.getElementById('venta-fecha').value;
+  const { data: regs } = await supabaseClient.from('pel_registros_ventas').select('*').eq('fecha', fecha).order('created_at', { ascending: false });
+  const body = document.getElementById('historial-body');
+  if(!regs || !regs.length) body.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:16px;">Sin ventas registradas hoy</td></tr>';
+  else {
+    body.innerHTML = regs.map(r => `<tr>
+      <td>${new Date(r.created_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</td>
+      <td>${r.tipo}</td><td>${r.nombre}</td><td>${r.mascota}</td>
+      <td>${fmt.format(r.precio * r.cantidad)}</td><td>${r.metodo_pago}</td>
+      <td><button class="btn btn-danger btn-sm" onclick="deleteRegistro('${r.id}')">🗑</button></td>
+    </tr>`).join('');
+  }
+}
+
+async function deleteRegistro(id) {
+  if(!confirm('¿Eliminar registro?')) return;
+  await supabaseClient.from('pel_registros_ventas').delete().eq('id', id);
+  await loadVentasGuardadas();
+}
+
+// ════════════════════════════════════════════
+// ─── INSUMOS ───
+// ════════════════════════════════════════════
+let editingInsumoId = null;
+
+function toggleRendimiento() {
+  const tipo = document.getElementById('ins-tipo-rendimiento').value;
+  document.getElementById('ins-rend-perros-group').style.display = tipo === 'perros' ? 'block' : 'none';
+  document.getElementById('ins-rend-porcentaje-group').style.display = tipo === 'porcentaje' ? 'block' : 'none';
+}
+
+async function loadInsumos() {
+  const { data: insumos } = await supabaseClient.from('pel_insumos').select('*').order('nombre');
+  const list = document.getElementById('insumos-list');
+  if(!insumos || !insumos.length) list.innerHTML = '<p style="color:var(--muted);text-align:center;padding:16px;">No hay insumos.</p>';
+  else {
+    list.innerHTML = insumos.map(ins => {
+      const color = ins.cantidad_actual < 20 ? 'var(--danger)' : ins.cantidad_actual < 50 ? 'var(--warn)' : 'var(--accent)';
+      return `<div class="insumo-card" style="border-left-color:${color}">
+        <div style="flex:1">
+          <div class="ins-name">${ins.nombre}</div>
+          <div class="ins-detail">${ins.tipo_rendimiento === 'perros' ? `Rinde ${ins.rend_perros} perros` : `Uso por %`} · ${ins.unidad}</div>
+          <div class="ins-barra"><div class="ins-barra-fill" style="width:${ins.cantidad_actual}%;background:${color}"></div></div>
+        </div>
+        <div class="ins-actions">
+          <button class="btn btn-secondary btn-sm" onclick="openInsumoModal('${ins.id}')">✏️</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteInsumo('${ins.id}')">🗑</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+}
+
+async function openInsumoModal(id) {
+  editingInsumoId = id || null;
+  if(id) {
+    const { data: ins } = await supabaseClient.from('pel_insumos').select('*').eq('id', id).single();
+    document.getElementById('ins-nombre').value = ins.nombre;
+    document.getElementById('ins-costo').value = ins.costo;
+    document.getElementById('ins-tipo-rendimiento').value = ins.tipo_rendimiento;
+    document.getElementById('ins-rend-perros').value = ins.rend_perros;
+    document.getElementById('ins-rend-pct-chico').value = ins.rend_pct_chico;
+    document.getElementById('ins-rend-pct-mediano').value = ins.rend_pct_mediano;
+    document.getElementById('ins-rend-pct-grande').value = ins.rend_pct_grande;
+    document.getElementById('ins-rend-pct-cachorro').value = ins.rend_pct_cachorro;
+    document.getElementById('ins-unidad').value = ins.unidad;
+  } else {
+    document.getElementById('ins-nombre').value = '';
+    document.getElementById('ins-costo').value = '';
+    document.getElementById('ins-rend-perros').value = '20';
+  }
+  toggleRendimiento();
+  openModal('modal-insumo');
+}
+
+async function saveInsumo() {
+  const nombre = document.getElementById('ins-nombre').value;
+  const costo = parseFloat(document.getElementById('ins-costo').value) || 0;
+  const tipo = document.getElementById('ins-tipo-rendimiento').value;
+  const data = {
+    nombre, costo, tipo_rendimiento: tipo,
+    rend_perros: parseInt(document.getElementById('ins-rend-perros').value) || 1,
+    rend_pct_chico: parseFloat(document.getElementById('ins-rend-pct-chico').value) || 0,
+    rend_pct_mediano: parseFloat(document.getElementById('ins-rend-pct-mediano').value) || 0,
+    rend_pct_grande: parseFloat(document.getElementById('ins-rend-pct-grande').value) || 0,
+    rend_pct_cachorro: parseFloat(document.getElementById('ins-rend-pct-cachorro').value) || 0,
+    unidad: document.getElementById('ins-unidad').value
+  };
+  
+  if(editingInsumoId) await supabaseClient.from('pel_insumos').update(data).eq('id', editingInsumoId);
+  else await supabaseClient.from('pel_insumos').insert([data]);
+  
+  closeModal('modal-insumo');
+  await loadInsumos();
+}
+
+async function deleteInsumo(id) {
+  if(!confirm('¿Eliminar?')) return;
+  await supabaseClient.from('pel_insumos').delete().eq('id', id);
+  await loadInsumos();
+}
+
+// ════════════════════════════════════════════
+// ─── CAPITAL, EMPLEADOS, CAJA, REPORTES ───
+// ════════════════════════════════════════════
+async function loadCapital() {
+  const { data: prods } = await supabaseClient.from('pel_productos').select('*');
+  const { data: ins } = await supabaseClient.from('pel_insumos').select('*');
+  const { data: caps } = await supabaseClient.from('pel_capital_entradas').select('*');
+  
+  const valInv = (prods||[]).reduce((s,p) => s + (p.costo * p.stock), 0);
+  const valIns = (ins||[]).reduce((s,i) => s + i.costo, 0);
+  const valExtra = (caps||[]).reduce((s,c) => s + c.monto, 0);
+  
+  document.getElementById('capital-auto').textContent = fmt.format(valInv + valIns);
+  document.getElementById('capital-actual').textContent = fmt.format(valInv + valIns + valExtra);
+  document.getElementById('capital-desglose').textContent = `Inv: ${fmt.format(valInv)} · Ins: ${fmt.format(valIns)} · Extra: ${fmt.format(valExtra)}`;
+  
+  const timeline = document.getElementById('capital-timeline');
+  timeline.innerHTML = (caps||[]).map(c => `<div class="capital-entry">
+    <div class="cap-date">${new Date(c.created_at).toLocaleDateString()}</div>
+    <div class="cap-amount">+${fmt.format(c.monto)}</div>
+    <div>${c.descripcion}</div>
+  </div>`).join('');
+}
+
+async function agregarCapital() {
+  const monto = parseFloat(document.getElementById('cap-monto').value);
+  const descripcion = document.getElementById('cap-desc').value;
+  if(monto > 0) {
+    await supabaseClient.from('pel_capital_entradas').insert([{ monto, descripcion }]);
+    document.getElementById('cap-monto').value = '';
+    await loadCapital();
+  }
+}
+
+async function loadEmpleados() {
+  const { data: emps } = await supabaseClient.from('pel_empleados').select('*');
+  const list = document.getElementById('empleados-list');
+  list.innerHTML = (emps||[]).map(e => `<div class="employee-card">
+    <div style="flex:1"><div class="emp-name">${e.nombre}</div><div style="font-size:12px;color:var(--muted)">${e.cargo}</div></div>
+    <div class="emp-salary">${fmt.format(e.pago_dia)} /día</div>
+    <div class="emp-actions">
+      <button class="btn btn-secondary btn-sm" onclick="openEmpleadoModal('${e.id}')">✏️</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteEmpleado('${e.id}')">🗑</button>
+    </div>
+  </div>`).join('');
+  
+  const { data: pagos } = await supabaseClient.from('pel_pagos_empleados').select('monto');
+  const totalPagos = (pagos||[]).reduce((s,p) => s + p.monto, 0);
+  document.getElementById('empleados-resumen').innerHTML = `<div class="report-summary"><div class="report-item"><div class="rlabel">Total Pagado</div><div class="rvalue">${fmt.format(totalPagos)}</div></div></div>`;
+}
+
+async function openEmpleadoModal(id) {
+  editingEmpleadoId = id || null;
+  if(id) {
+    const { data: e } = await supabaseClient.from('pel_empleados').select('*').eq('id', id).single();
+    document.getElementById('emp-nombre').value = e.nombre;
+    document.getElementById('emp-cargo').value = e.cargo;
+    document.getElementById('emp-pago').value = e.pago_dia;
+  } else {
+    document.getElementById('emp-nombre').value = '';
+    document.getElementById('emp-pago').value = '';
+  }
+  openModal('modal-empleado');
+}
+
+async function saveEmpleado() {
+  const data = { nombre: document.getElementById('emp-nombre').value, cargo: document.getElementById('emp-cargo').value, pago_dia: parseFloat(document.getElementById('emp-pago').value) || 0 };
+  if(editingEmpleadoId) await supabaseClient.from('pel_empleados').update(data).eq('id', editingEmpleadoId);
+  else await supabaseClient.from('pel_empleados').insert([data]);
+  closeModal('modal-empleado');
+  await loadEmpleados();
+}
+
+async function deleteEmpleado(id) {
+  if(confirm('¿Eliminar?')) { await supabaseClient.from('pel_empleados').delete().eq('id', id); await loadEmpleados(); }
+}
+
+async function registrarMovimiento() {
+  const data = {
+    tipo: document.getElementById('mov-tipo').value,
+    categoria: document.getElementById('mov-categoria').value,
+    monto: parseFloat(document.getElementById('mov-monto').value) || 0,
+    descripcion: document.getElementById('mov-desc').value
+  };
+  await supabaseClient.from('pel_movimientos_caja').insert([data]);
+  toast('Movimiento registrado');
+  await loadCaja();
+}
+
+async function loadCaja() {
+  const { data: movs } = await supabaseClient.from('pel_movimientos_caja').select('*').order('created_at', { ascending: false }).limit(10);
+  const body = document.getElementById('caja-mov-body');
+  body.innerHTML = (movs||[]).map(m => `<tr>
+    <td>${new Date(m.created_at).toLocaleDateString()}</td>
+    <td>${m.tipo}</td><td>${m.categoria}</td><td>${fmt.format(m.monto)}</td><td>${m.descripcion}</td>
+  </tr>`).join('');
+}
+
+async function loadReportes() {
+  const { data: regs } = await supabaseClient.from('pel_registros_ventas').select('*');
+  const { data: movs } = await supabaseClient.from('pel_movimientos_caja').select('*');
+  
+  const ingresos = (regs||[]).reduce((s,r) => s + (r.precio * r.cantidad), 0);
+  const gastos = (movs||[]).filter(m => m.categoria === 'gasto').reduce((s,m) => s + m.monto, 0);
+  
+  document.getElementById('report-content').innerHTML = `
+    <div class="report-summary">
+      <div class="report-item"><div class="rlabel">Ingresos Totales</div><div class="rvalue">${fmt.format(ingresos)}</div></div>
+      <div class="report-item"><div class="rlabel">Gastos Totales</div><div class="rvalue">${fmt.format(gastos)}</div></div>
+      <div class="report-item positive"><div class="rlabel">Balance</div><div class="rvalue">${fmt.format(ingresos - gastos)}</div></div>
+    </div>
+  `;
+}
+
+async function loadDashboard() {
+  const { data: regs } = await supabaseClient.from('pel_registros_ventas').select('*');
+  const { data: movs } = await supabaseClient.from('pel_movimientos_caja').select('*');
+  
+  const ingresos = (regs||[]).reduce((s,r) => s + (r.precio * r.cantidad), 0);
+  const gastos = (movs||[]).filter(m => m.categoria === 'gasto').reduce((s,m) => s + m.monto, 0);
+  
+  document.getElementById('stat-ganancia-bruta').textContent = fmt.format(ingresos);
+  document.getElementById('stat-ganancia-liquida').textContent = fmt.format(ingresos - gastos);
+  
+  const hoy = new Date().toISOString().split('T')[0];
+  const regsHoy = (regs||[]).filter(r => r.fecha === hoy);
+  document.getElementById('stat-ingresos-hoy').textContent = fmt.format(regsHoy.reduce((s,r) => s + (r.precio * r.cantidad), 0));
+  document.getElementById('stat-perros-hoy').textContent = regsHoy.filter(r => r.tipo === 'servicio').length;
+  
+  await loadCapital();
+}
+
+// Inicializar
+window.onload = () => showPage('dashboard');
+
+</script>
+</body>
+</html>
