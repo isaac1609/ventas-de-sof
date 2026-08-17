@@ -7,6 +7,7 @@
 <!-- Supabase Client -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <style>
 :root{
   --primary:#5B4FE8;--primary-dark:#4338CA;--primary-light:#EEF2FF;
@@ -160,6 +161,10 @@ td{padding:10px;border-bottom:1px solid var(--border);}
 .report-item{padding:14px;border-radius:10px;background:#f9fafb;text-align:center;}
 .report-item .rlabel{font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;margin-bottom:4px;}
 .report-item .rvalue{font-size:20px;font-weight:800;}
+.charts-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:16px;}
+.charts-grid .card{min-height:300px;}
+.charts-grid canvas{height:220px!important;max-height:220px;}
+@media(max-width:700px){.charts-grid{grid-template-columns:1fr;}}
 .report-item.positive .rvalue{color:var(--accent);}
 .report-item.negative .rvalue{color:var(--danger);}
 
@@ -397,7 +402,10 @@ td{padding:10px;border-bottom:1px solid var(--border);}
           <div class="page-header"><div class="page-title">💎 Capital</div></div>
           <div class="stats-grid">
             <div class="stat-card"><div class="stat-label">Capital Total</div><div class="stat-value" id="capital-actual">$0</div><div class="stat-sub" id="capital-desglose">Cargando...</div></div>
-            <div class="stat-card accent"><div class="stat-label">Valor en Inventario</div><div class="stat-value" id="capital-auto">$0</div><div class="stat-sub" id="capital-auto-sub">Cargando...</div></div>
+            <div class="stat-card accent"><div class="stat-label">Valor en Inventario</div><div class="stat-value" id="capital-auto">$0</div><div class="stat-sub">Productos + insumos + herramientas</div></div>
+            <div class="stat-card"><div class="stat-label">Productos</div><div class="stat-value" id="capital-productos">$0</div><div class="stat-sub">Costo del stock actual</div></div>
+            <div class="stat-card"><div class="stat-label">Insumos</div><div class="stat-value" id="capital-insumos">$0</div><div class="stat-sub">Valor restante estimado</div></div>
+            <div class="stat-card"><div class="stat-label">Herramientas</div><div class="stat-value" id="capital-herramientas">$0</div><div class="stat-sub">Valor útil restante</div></div>
           </div>
           <div class="card">
             <div class="stat-label" style="margin-bottom:15px">Añadir Capital Extra (Efectivo/Inversión)</div>
@@ -427,6 +435,12 @@ td{padding:10px;border-bottom:1px solid var(--border);}
               <button class="report-period-btn" onclick="changeReportPeriod('mes',this)">Este Mes</button>
             </div>
             <div id="report-content"></div>
+            <div id="report-charts" class="charts-grid" style="display:none">
+              <div class="card"><div class="stat-label">Productos más vendidos</div><canvas id="chart-productos"></canvas></div>
+              <div class="card"><div class="stat-label">Servicios más realizados</div><canvas id="chart-servicios"></canvas></div>
+              <div class="card"><div class="stat-label">Mascotas que más visitan la peluquería</div><canvas id="chart-mascotas"></canvas></div>
+              <div class="card"><div class="stat-label">Medios de pago</div><canvas id="chart-pagos"></canvas></div>
+            </div>
           </div>
         </div>
 
@@ -1160,7 +1174,7 @@ async function loadCapital() {
   const { data: caps } = await supabaseClient.from('pel_capital_entradas').select('*').limit(1000);
   
   const valInv = (prods||[]).reduce((s,p) => s + (Number(p.costo || 0) * Number(p.stock || 0)), 0);
-  const valIns = (ins||[]).reduce((s,i) => s + Number(i.costo || 0), 0);
+  const valIns = (ins||[]).reduce((s,i) => s + Number(i.costo || 0) * Math.max(0, Math.min(100, Number(i.cantidad_actual ?? 100))) / 100, 0);
   const valHerr = (herramientas||[]).reduce((s,h) => {
     const vida = Math.max(1, Number(h.vida_util_total || 1));
     const restante = Math.max(0, vida - Number(h.cortes_realizados || 0));
@@ -1169,6 +1183,9 @@ async function loadCapital() {
   const valExtra = (caps||[]).reduce((s,c) => s + Number(c.monto || 0), 0);
   
   document.getElementById('capital-auto').textContent = fmt.format(valInv + valIns + valHerr);
+  document.getElementById('capital-productos').textContent = fmt.format(valInv);
+  document.getElementById('capital-insumos').textContent = fmt.format(valIns);
+  document.getElementById('capital-herramientas').textContent = fmt.format(valHerr);
   document.getElementById('capital-actual').textContent = fmt.format(valInv + valIns + valHerr + valExtra);
   document.getElementById('capital-desglose').textContent = `Inv: ${fmt.format(valInv)} · Ins: ${fmt.format(valIns)} · Herr: ${fmt.format(valHerr)} · Extra: ${fmt.format(valExtra)}`;
   
@@ -1286,11 +1303,34 @@ function filtrarPorPeriodo(items, fechaFn) {
 }
 function resumenFinanciero(regs, movs, pagos) {
   const ingresos = (regs || []).reduce((s,r) => s + Number(r.precio || 0) * Number(r.cantidad || 0), 0);
-  const costoVentas = (regs || []).reduce((s,r) => s + (Number(r.costo || 0) || Math.max(0, Number(r.precio || 0) * Number(r.cantidad || 0) - Number(r.ganancia || 0))), 0);
-  const gananciaBruta = (regs || []).reduce((s,r) => s + (Number(r.ganancia) || (Number(r.precio || 0) * Number(r.cantidad || 0) - Number(r.costo || 0))), 0);
+  const costoVentas = (regs || []).reduce((s,r) => s + Math.max(0, Number(r.costo || 0)), 0);
+  const gananciaBruta = ingresos - costoVentas;
   const gastos = (movs || []).filter(m => m.categoria === 'gasto').reduce((s,m) => s + Number(m.monto || 0), 0);
   const pagosEmpleados = (pagos || []).reduce((s,p) => s + Number(p.monto || 0), 0);
   return { ingresos, costoVentas, gananciaBruta, gastos, pagosEmpleados, gananciaLiquida: gananciaBruta - gastos - pagosEmpleados };
+}
+
+function agruparRanking(items, keyFn, valueFn) {
+  const mapa = {};
+  (items || []).forEach(item => {
+    const key = String(keyFn(item) || '').trim();
+    if(!key || key === '-') return;
+    mapa[key] = (mapa[key] || 0) + Number(valueFn(item) || 0);
+  });
+  return Object.entries(mapa).sort((a,b) => b[1] - a[1]).slice(0, 8);
+}
+
+function renderReportChart(id, ranking, label, color, type = 'bar') {
+  if(!window.Chart) return;
+  window._reportCharts = window._reportCharts || {};
+  if(window._reportCharts[id]) window._reportCharts[id].destroy();
+  const canvas = document.getElementById(id);
+  if(!canvas) return;
+  window._reportCharts[id] = new Chart(canvas, {
+    type,
+    data: { labels: ranking.map(x => x[0]), datasets: [{ label, data: ranking.map(x => x[1]), backgroundColor: color, borderColor: color, borderWidth: 1 }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: type === 'doughnut' } }, scales: type === 'doughnut' ? {} : { y: { beginAtZero: true, ticks: { precision: 0 } } } }
+  });
 }
 
 async function loadReportes() {
@@ -1305,10 +1345,17 @@ async function loadReportes() {
     <div class="report-summary">
       <div class="report-item"><div class="rlabel">Ingresos</div><div class="rvalue">${fmt.format(r.ingresos)}</div></div>
       <div class="report-item"><div class="rlabel">Costo de ventas</div><div class="rvalue">${fmt.format(r.costoVentas)}</div></div>
-      <div class="report-item positive"><div class="rlabel">Ganancia bruta</div><div class="rvalue">${fmt.format(r.gananciaBruta)}</div></div>
-      <div class="report-item"><div class="rlabel">Gastos y empleados</div><div class="rvalue">${fmt.format(r.gastos + r.pagosEmpleados)}</div></div>
-      <div class="report-item positive"><div class="rlabel">Ganancia líquida</div><div class="rvalue">${fmt.format(r.gananciaLiquida)}</div></div>
+      <div class="report-item positive"><div class="rlabel">Ganancia bruta</div><div class="rvalue">${fmt.format(r.gananciaBruta)}</div><div class="stat-sub">Ingresos − costos</div></div>
+      <div class="report-item"><div class="rlabel">Gastos</div><div class="rvalue">${fmt.format(r.gastos)}</div></div>
+      <div class="report-item"><div class="rlabel">Pagos empleados</div><div class="rvalue">${fmt.format(r.pagosEmpleados)}</div></div>
+      <div class="report-item positive"><div class="rlabel">Ganancia líquida</div><div class="rvalue">${fmt.format(r.gananciaLiquida)}</div><div class="stat-sub">Bruta − gastos − empleados</div></div>
     </div>`;
+  const charts = document.getElementById('report-charts');
+  charts.style.display = 'grid';
+  renderReportChart('chart-productos', agruparRanking(regs.filter(v => v.tipo === 'producto'), v => v.nombre, v => v.cantidad), 'Unidades vendidas', '#5B4FE8');
+  renderReportChart('chart-servicios', agruparRanking(regs.filter(v => v.tipo === 'servicio'), v => v.nombre, v => v.cantidad), 'Servicios realizados', '#10B981');
+  renderReportChart('chart-mascotas', agruparRanking(regs.filter(v => v.tipo === 'servicio'), v => v.mascota, v => v.cantidad), 'Visitas', '#F59E0B');
+  renderReportChart('chart-pagos', agruparRanking(regs, v => v.metodo_pago, v => Number(v.precio || 0) * Number(v.cantidad || 0)), 'Ingresos', ['#5B4FE8','#10B981','#F59E0B','#EF4444'], 'doughnut');
 }
 
 function changeReportPeriod(periodo, btn) {
