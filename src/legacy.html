@@ -257,8 +257,8 @@ td{padding:10px;border-bottom:1px solid var(--border);}
           <div class="page-header"><div class="page-title">🐾 Capital y Ganancias</div><button class="btn btn-secondary" onclick="loadDashboard()">🔄 Actualizar</button></div>
           <div class="stats-grid">
             <div class="stat-card"><div class="stat-label">Capital Invertido (acumulado)</div><div class="stat-value" id="stat-capital">$0</div><div class="stat-sub">Productos + Insumos · Solo sube</div></div>
-            <div class="stat-card accent"><div class="stat-label">Ganancia Bruta</div><div class="stat-value" id="stat-ganancia-bruta">$0</div><div class="stat-sub">Total cobrado</div></div>
-            <div class="stat-card accent"><div class="stat-label">Ganancia Líquida</div><div class="stat-value" id="stat-ganancia-liquida">$0</div><div class="stat-sub">Ganancia real</div></div>
+            <div class="stat-card accent"><div class="stat-label">Ganancia Bruta</div><div class="stat-value" id="stat-ganancia-bruta">$0</div><div class="stat-sub">Total cobrado, sin descuentos</div></div>
+            <div class="stat-card accent"><div class="stat-label">Ganancia Líquida</div><div class="stat-value" id="stat-ganancia-liquida">$0</div><div class="stat-sub">Después de costos y gastos</div></div>
             <div class="stat-card warn"><div class="stat-label">Pago Empleados (este mes)</div><div class="stat-value" id="stat-pago-empleados">$0</div><div class="stat-sub">Total pagado</div></div>
             <div class="stat-card"><div class="stat-label">Valor Inventario</div><div class="stat-value" id="stat-inventario">$0</div></div>
             <div class="stat-card"><div class="stat-label">Ingresos Hoy</div><div class="stat-value" id="stat-ingresos-hoy">$0</div></div>
@@ -1304,10 +1304,11 @@ function filtrarPorPeriodo(items, fechaFn) {
 function resumenFinanciero(regs, movs, pagos) {
   const ingresos = (regs || []).reduce((s,r) => s + Number(r.precio || 0) * Number(r.cantidad || 0), 0);
   const costoVentas = (regs || []).reduce((s,r) => s + Math.max(0, Number(r.costo || 0)), 0);
-  const gananciaBruta = ingresos - costoVentas;
   const gastos = (movs || []).filter(m => m.categoria === 'gasto').reduce((s,m) => s + Number(m.monto || 0), 0);
   const pagosEmpleados = (pagos || []).reduce((s,p) => s + Number(p.monto || 0), 0);
-  return { ingresos, costoVentas, gananciaBruta, gastos, pagosEmpleados, gananciaLiquida: gananciaBruta - gastos - pagosEmpleados };
+  const gananciaBruta = ingresos;
+  const gananciaLiquida = ingresos - costoVentas - gastos - pagosEmpleados;
+  return { ingresos, costoVentas, gastos, pagosEmpleados, gananciaBruta, gananciaLiquida };
 }
 
 function agruparRanking(items, keyFn, valueFn) {
@@ -1345,10 +1346,10 @@ async function loadReportes() {
     <div class="report-summary">
       <div class="report-item"><div class="rlabel">Ingresos</div><div class="rvalue">${fmt.format(r.ingresos)}</div></div>
       <div class="report-item"><div class="rlabel">Costo de ventas</div><div class="rvalue">${fmt.format(r.costoVentas)}</div></div>
-      <div class="report-item positive"><div class="rlabel">Ganancia bruta</div><div class="rvalue">${fmt.format(r.gananciaBruta)}</div><div class="stat-sub">Ingresos − costos</div></div>
+      <div class="report-item positive"><div class="rlabel">Ganancia bruta</div><div class="rvalue">${fmt.format(r.gananciaBruta)}</div><div class="stat-sub">Total cobrado, sin descuentos</div></div>
       <div class="report-item"><div class="rlabel">Gastos</div><div class="rvalue">${fmt.format(r.gastos)}</div></div>
       <div class="report-item"><div class="rlabel">Pagos empleados</div><div class="rvalue">${fmt.format(r.pagosEmpleados)}</div></div>
-      <div class="report-item positive"><div class="rlabel">Ganancia líquida</div><div class="rvalue">${fmt.format(r.gananciaLiquida)}</div><div class="stat-sub">Bruta − gastos − empleados</div></div>
+      <div class="report-item positive"><div class="rlabel">Ganancia líquida</div><div class="rvalue">${fmt.format(r.gananciaLiquida)}</div><div class="stat-sub">Bruta − costos − gastos − empleados</div></div>
     </div>`;
   const charts = document.getElementById('report-charts');
   charts.style.display = 'grid';
@@ -1367,12 +1368,14 @@ function changeReportPeriod(periodo, btn) {
 
 async function exportarVentasExcel() {
   const { data: ventas, error } = await supabaseClient.from('pel_registros_ventas').select('*').limit(1000);
+  const { data: movimientos } = await supabaseClient.from('pel_movimientos_caja').select('*').limit(1000);
+  const { data: pagos } = await supabaseClient.from('pel_pagos_empleados').select('monto,fecha_pago,created_at').limit(1000);
   if(error || !ventas || !ventas.length) return toast('No hay ventas para exportar');
-  const filas = ventas.map(v => ({ Fecha: fechaRegistro(v), Tipo: v.tipo, Item: v.nombre, Tamaño: v.tamano || '', Cantidad: v.cantidad, Precio: Number(v.precio || 0), Costo: Number(v.costo || 0), Ingreso: Number(v.precio || 0) * Number(v.cantidad || 0), 'Ganancia Bruta': Number(v.ganancia || 0), 'Método de pago': v.metodo_pago, Mascota: v.mascota || '' }));
-  const resumen = resumenFinanciero(ventas, [], []);
+  const filas = ventas.map(v => { const ventaBruta = Number(v.precio || 0) * Number(v.cantidad || 0); const costo = Number(v.costo || 0); return { Fecha: fechaRegistro(v), Tipo: v.tipo, Item: v.nombre, Tamaño: v.tamano || '', Cantidad: v.cantidad, Precio: Number(v.precio || 0), 'Venta Bruta': ventaBruta, 'Costos descontados': costo, 'Ganancia Líquida': ventaBruta - costo, 'Método de pago': v.metodo_pago, Mascota: v.mascota || '' }; });
+  const resumen = resumenFinanciero(ventas, movimientos || [], pagos || []);
   const libro = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(libro, XLSX.utils.json_to_sheet(filas), 'Ventas');
-  XLSX.utils.book_append_sheet(libro, XLSX.utils.json_to_sheet([{ Concepto: 'Ingresos', Monto: resumen.ingresos }, { Concepto: 'Costo de ventas', Monto: resumen.costoVentas }, { Concepto: 'Ganancia bruta', Monto: resumen.gananciaBruta }]), 'Resumen');
+  XLSX.utils.book_append_sheet(libro, XLSX.utils.json_to_sheet([{ Concepto: 'Ganancia bruta (total cobrado)', Monto: resumen.gananciaBruta }, { Concepto: 'Costos descontados', Monto: resumen.costoVentas }, { Concepto: 'Gastos', Monto: resumen.gastos }, { Concepto: 'Pagos empleados', Monto: resumen.pagosEmpleados }, { Concepto: 'Ganancia líquida', Monto: resumen.gananciaLiquida }]), 'Resumen');
   XLSX.writeFile(libro, `ventas-${new Date().toISOString().slice(0,10)}.xlsx`);
 }
 
